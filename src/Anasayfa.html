@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ALtın Stok</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 1rem; }
+        input, button { padding: .55rem .7rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { border-bottom: 1px solid #e5e7eb; padding: .55rem; text-align: left; }
+        .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+        .muted { color:#6b7280; font-size:.9rem; }
+    </style>
+</head>
+<body>
+<h1>Altın Stok</h1>
+
+<div style="display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;">
+    <input id="name" placeholder="Ürün adı" />
+    <input id="qty" type="number" min="0" placeholder="Başlangıç adedi" />
+    <button id="add">Ekle</button>
+</div>
+<p class="muted">İpucu: Satış için “−1” ya da “Sat (N)” kullan. Alış için “+1” ya da “Al (N)”.</p>
+
+<table>
+    <thead>
+    <tr>
+        <th style="width:40%">Ürün</th>
+        <th style="width:15%">Adet</th>
+        <th>İşlemler</th>
+        <th style="width:70px"></th>
+    </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+</table>
+
+<script>
+    // Basit kalıcılık
+    const load = () => JSON.parse(localStorage.getItem('stok') || '[]');
+    const save = (data) => localStorage.setItem('stok', JSON.stringify(data));
+
+    const rows = document.getElementById('rows');
+    const name = document.getElementById('name');
+    const qty  = document.getElementById('qty');
+    const add  = document.getElementById('add');
+
+    let data = load();
+
+    function clamp(n){ return n < 0 ? 0 : n; }
+
+    function askAmount(defaultVal = 1, title = "Miktar gir (pozitif sayı)") {
+        const val = prompt(title, String(defaultVal ?? 1));
+        if (val === null) return null; // vazgeçildi
+        const num = Number(val);
+        if (!Number.isFinite(num) || num < 0) { alert("Geçerli, pozitif bir sayı gir."); return null; }
+        return Math.floor(num);
+    }
+
+    function render() {
+        rows.innerHTML = '';
+        data.forEach((item, i) => {
+            const tr = document.createElement('tr');
+
+            // Ürün adı hücresi (rename için tıklanabilir)
+            const tdName = document.createElement('td');
+            tdName.textContent = item.name;
+            tdName.title = "Yeniden adlandırmak için çift tıkla";
+            tdName.ondblclick = () => {
+                const nv = prompt("Yeni ürün adı:", item.name);
+                if (nv && nv.trim()) {
+                    item.name = nv.trim();
+                    save(data); render();
+                }
+            };
+
+            // Adet hücresi (elle düzeltmek için çift tıkla)
+            const tdQty = document.createElement('td');
+            tdQty.textContent = item.qty;
+            tdQty.title = "Adedi elle düzeltmek için çift tıkla";
+            tdQty.ondblclick = () => {
+                const nv = askAmount(item.qty, "Yeni adet (pozitif sayı)");
+                if (nv !== null) { item.qty = nv; save(data); render(); }
+            };
+
+            // İşlemler
+            const tdAct = document.createElement('td');
+            const box = document.createElement('div');
+            box.className = 'row-actions';
+
+            const btnPlus1 = document.createElement('button');
+            btnPlus1.textContent = "+1";
+            btnPlus1.onclick = () => { item.qty = clamp(item.qty + 1); save(data); render(); };
+
+            const btnMinus1 = document.createElement('button');
+            btnMinus1.textContent = "−1";
+            btnMinus1.onclick = () => { item.qty = clamp(item.qty - 1); save(data); render(); };
+
+            const btnBuyMany = document.createElement('button');
+            btnBuyMany.textContent = "Al (N)";
+            btnBuyMany.title = "Toplu alış / stoğu artır";
+            btnBuyMany.onclick = () => {
+                const n = askAmount(5, "Kaç adet ALINACAK? (stoğa ekle)");
+                if (n !== null) { item.qty = clamp(item.qty + n); save(data); render(); }
+            };
+
+            const btnSellMany = document.createElement('button');
+            btnSellMany.textContent = "Sat (N)";
+            btnSellMany.title = "Toplu satış / stoğu azalt";
+            btnSellMany.onclick = () => {
+                const n = askAmount(3, "Kaç adet SATILACAK? (stoktan düş)");
+                if (n !== null) { item.qty = clamp(item.qty - n); save(data); render(); }
+            };
+
+            box.append(btnPlus1, btnMinus1, btnBuyMany, btnSellMany);
+            tdAct.appendChild(box);
+
+            // Sil
+            const tdDel = document.createElement('td');
+            const delBtn = document.createElement('button');
+            delBtn.textContent = "Sil";
+            delBtn.onclick = () => {
+                if (confirm(`"${item.name}" silinsin mi?`)) {
+                    data.splice(i, 1); save(data); render();
+                }
+            };
+            tdDel.appendChild(delBtn);
+
+            tr.append(tdName, tdQty, tdAct, tdDel);
+            rows.appendChild(tr);
+        });
+    }
+
+    add.onclick = () => {
+        const n = name.value.trim();
+        const q = parseInt(qty.value || '0', 10);
+        if (!n) return;
+        data.push({ name: n, qty: clamp(isNaN(q) ? 0 : q) });
+        save(data); name.value=''; qty.value='';
+        render();
+    };
+
+    // Enter ile ekleme
+    name.addEventListener('keydown', e => { if (e.key === 'Enter') add.click(); });
+    qty.addEventListener('keydown', e => { if (e.key === 'Enter') add.click(); });
+
+    render();
+</script>
+</body>
+</html>
